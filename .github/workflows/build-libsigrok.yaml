@@ -1,0 +1,40 @@
+name: libsigrok-builds
+on:
+  workflow_dispatch:
+  push:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    strategy:
+      matrix:
+        include:
+          - { target: x86_64 }
+          - { target: i686   }
+    
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v3
+        id: cache
+        with:
+          key: dist-${{ matrix.target }}-${{ hashFiles('.github/workflows/build-libsigrok.yaml') }}-${{ hashFiles('mxe-build/**') }}
+          path: ./mxe-build/dist
+
+      - if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          TARGET: "${{ matrix.target }}"
+        run: ./build.sh
+        working-directory: ./mxe-build
+      
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sigrok-${{matrix.target}}
+          path: ./mxe-build/dist
+          if-no-files-found: error
+          retention-days: 1
