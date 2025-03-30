@@ -1,3 +1,5 @@
-mxe-build/build
-mxe-build/dist
-.idea
+mxe-build/build/
+mxe-build/dist/
+.idea/
+dist/
+uv.lock

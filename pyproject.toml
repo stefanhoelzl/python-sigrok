@@ -1,0 +1,48 @@
+[project]
+name = "sigrok"
+version = "0.0.1"
+authors = [
+    { name = "Stefan Hoelzl", email = "stefan.hoelzl@posteo.de"},
+]
+description = "Python-API for libsigrok"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pyclibrary>=0.2.2",
+    "platformdirs>=4.3.7",
+    "pkgconfig>=1.5.5; sys_platform != 'windows'"
+]
+
+[dependency-groups]
+dev = [
+    "ruff==0.11.2",
+    "invoke==2.2.0",
+]
+
+[tool.uv]
+python-preference = "only-managed"
+default-groups = "all"
+
+[tool.ruff.format]
+skip-magic-trailing-comma = true
+
+[tool.ruff.lint.isort]
+split-on-trailing-comma = false
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    # docstrings
+    "D",
+    # missing trailing comma
+    "COM812",
+]
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = [
+    # import alias does not rename package
+    "PLC0414"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
