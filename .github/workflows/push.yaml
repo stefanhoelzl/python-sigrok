@@ -9,6 +9,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
 
+      - run: uv.run stubgen
       - run: uv run fl --ci
       - run: uv build
 

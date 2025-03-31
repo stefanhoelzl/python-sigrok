@@ -7,7 +7,9 @@ ProjectPath = Path(__file__).parent
 
 
 @task
-def fl(ctx: Context, single_file: str | None = None, *, ci: bool = False) -> None:
+def format_and_lint(
+    ctx: Context, single_file: str | None = None, *, ci: bool = False
+) -> None:
     """formatting and linting"""
     fmt_flags = "--diff" if ci else ""
     chk_flags = (
