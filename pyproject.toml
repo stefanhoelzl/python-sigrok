@@ -10,13 +10,14 @@ requires-python = ">=3.10"
 dependencies = [
     "pyclibrary>=0.2.2",
     "platformdirs>=4.3.7",
-    "pkgconfig>=1.5.5; sys_platform != 'windows'"
+    "pkgconfig>=1.5.5; sys_platform != 'windows'",
 ]
 
 [dependency-groups]
 dev = [
     "ruff==0.11.2",
     "invoke==2.2.0",
+    "pytest==8.3.5",
 ]
 
 [tool.uv]
@@ -34,13 +35,33 @@ select = ["ALL"]
 ignore = [
     # docstrings
     "D",
+    # typing.Any used
+    "ANN401",
     # missing trailing comma
     "COM812",
+    # line to long handled by ruff format
+    "E501",
 ]
 [tool.ruff.lint.per-file-ignores]
-"**/__init__.py" = [
-    # import alias does not rename package
-    "PLC0414"
+"src/sigrok/__init__.py" = [
+    # imported but unused
+    "F401",
+    # from ... import *
+    "F403",
+]
+"src/sigrok/bindings.pyi" = [
+    # no CapWord convention
+    "N801",
+    # funtction name not lowercase
+    "N802",
+]
+"tests/**" = [
+    # assert used
+    "S101",
+]
+"tasks/**" = [
+    # print used
+    "T201",
 ]
 
 [build-system]

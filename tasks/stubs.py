@@ -101,5 +101,5 @@ def gen(ctx: Context, clib: str) -> None:
 
 
 @task
-def lib(ctx: Context) -> None:
-    gen(ctx, "sigrok.lib:sr")
+def bindings(ctx: Context) -> None:
+    gen(ctx, "sigrok.bindings:lib")

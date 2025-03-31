@@ -6,12 +6,15 @@ jobs:
   checks:
     runs-on: ubuntu-22.04
     steps:
+      - run: sudo apt-get install -y libsigrok4 libsigrok-dev
+
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
 
-      - run: uv.run stubgen
-      - run: uv run fl --ci
+      - run: uv.run inv stubs.bindings
+      - run: uv run inv dev.format-and-lint --ci
       - run: uv build
+      - run: uv run inv dev.tests
 
       - uses: actions/upload-artifact@v4
         with:

@@ -1,3 +1,5 @@
+*.pyi
+
 mxe-build/build/
 mxe-build/dist/
 .idea/

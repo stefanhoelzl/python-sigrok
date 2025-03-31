@@ -1,9 +1,10 @@
 import sys
 from pathlib import Path
 
+import pytest
 from invoke import Context, task
 
-ProjectPath = Path(__file__).parent
+ProjectPath = Path(__file__).parent.parent
 
 
 @task
@@ -27,3 +28,8 @@ def format_and_lint(
 
     if failed:
         sys.exit(1)
+
+
+@task
+def tests(_: Context) -> None:
+    pytest.main(ProjectPath / "tests")
