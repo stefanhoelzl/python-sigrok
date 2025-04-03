@@ -1,15 +1,15 @@
 import abc
 import ctypes as ct
+import enum
 import itertools
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import suppress
-from enum import IntEnum
 from types import TracebackType
-from typing import Any, ClassVar, Self
+from typing import TYPE_CHECKING, Any, ClassVar, Self
 
-from pyclibrary.c_library import CallResult
+from pyclibrary.c_library import CallResult  # type: ignore[import-untyped]
 
-from sigrok.bindings import lib
+from sigrok.bindings import Pointer, lib
 
 
 class SigrokError(Exception):
@@ -108,7 +108,7 @@ def _try(result: CallResult, hint: str = "") -> CallResult:
 
 
 def _iter_g_slist(slist: Any) -> Iterator[Any]:
-    gslist = ct.cast(slist, ct.POINTER(lib.GSList))
+    gslist = _cast_p(slist, lib.GSList)
     for idx in itertools.count():
         value = lib.g_slist_nth_data(gslist, idx).rval
         if value is None:
@@ -120,28 +120,32 @@ def _consume_g_slist(slist: Any) -> Iterator[Any]:
     try:
         yield from _iter_g_slist(slist)
     finally:
-        lib.g_slist_free(ct.cast(slist, ct.POINTER(lib.GSList)))
+        lib.g_slist_free(_cast_p(slist, lib.GSList))
 
 
 def _consume_g_array(array: Any, dt: Any) -> Iterator[Any]:
-    garray = ct.cast(array, ct.POINTER(lib.GArray))
+    garray = _cast_p(array, lib.GArray)
     # garray.contents.data gets interpreted as bytes,
     # therefore we access array.contents.contents
     # this works because since data is the first element in the garray struct
-    values_p_p = ct.cast(array, ct.POINTER(ct.POINTER(dt * garray.contents.len)))
+    values_p_p = _cast_p(array, ct.POINTER(dt * garray.contents.len))
     try:
         yield from values_p_p.contents.contents
     finally:
         lib.g_array_free(garray, free_segment=True)
 
 
-class ChannelType(IntEnum):
+def _cast_p(value: Any, dt: Any) -> Any:
+    return ct.cast(value, ct.POINTER(dt))
+
+
+class ChannelType(enum.IntEnum):
     Analog = lib.SR_CHANNEL_ANALOG
     Logic = lib.SR_CHANNEL_LOGIC
 
 
 class Channel:
-    def __init__(self, ch: ct.POINTER(lib.sr_channel)) -> None:
+    def __init__(self, ch: Pointer["lib.type_sr_channel"]) -> None:
         self._ch = ch
 
     @property
@@ -181,11 +185,14 @@ class SigrokChannelNotFoundError(SigrokError):
         self.channels = channels
 
 
-ConfigKey: type["lib.__sr_configkey_enum__"] = IntEnum("ConfigKey", lib.sr_configkey)
+if TYPE_CHECKING:
+    ConfigKey = enum.EnumType["lib.type_sr_configkey"]  # type: ignore[type-arg]
+else:
+    ConfigKey = enum.IntEnum("ConfigKey", lib.sr_configkey)  # type: ignore[misc]
 
 
 class Device:
-    def __init__(self, dev: ct.POINTER(lib.sr_dev_inst)) -> None:
+    def __init__(self, dev: Pointer["lib.type_sr_dev_inst"]) -> None:
         self._dev = dev
 
     @property
@@ -220,7 +227,7 @@ class Device:
 
     def channels(self) -> list[Channel]:
         return [
-            Channel(ct.cast(ch, ct.POINTER(lib.sr_channel)))
+            Channel(_cast_p(ch, lib.sr_channel))
             for ch in _iter_g_slist(lib.sr_dev_inst_channels_get(self._dev).rval)
         ]
 
@@ -261,12 +268,10 @@ class Device:
 
 class DeviceDriver:
     def __init__(
-        self, sr: ct.POINTER(lib.sr_context), dr: ct.POINTER(lib.sr_dev_driver)
+        self, sr: Pointer["lib.type_sr_context"], dr: Pointer["lib.type_sr_dev_driver"]
     ) -> None:
         self._sr = sr
-        self._dr: ct.POINTER(lib.sr_dev_driver) = ct.cast(
-            dr, ct.POINTER(lib.sr_dev_driver)
-        )
+        self._dr: Pointer[lib.type_sr_dev_driver] = _cast_p(dr, lib.sr_dev_driver)
 
     @property
     def name(self) -> str:
@@ -300,8 +305,7 @@ class DeviceDriver:
         if slist is None:
             return []
         return [
-            Device(dev=ct.cast(x, ct.POINTER(lib.sr_dev_inst)))
-            for x in _consume_g_slist(slist)
+            Device(dev=_cast_p(x, lib.sr_dev_inst)) for x in _consume_g_slist(slist)
         ]
 
     def __str__(self) -> str:
@@ -312,7 +316,7 @@ class DeviceDriver:
 
 
 class Packet:
-    def __init__(self, packet: ct.POINTER(lib.sr_datafeed_packet)) -> None:
+    def __init__(self, packet: Pointer["lib.type_sr_datafeed_packet"]) -> None:
         self.type = packet.contents.type
 
     def __repr__(self) -> str:
@@ -320,9 +324,9 @@ class Packet:
 
 
 class HeaderPacket(Packet):
-    def __init__(self, packet: ct.POINTER(lib.sr_datafeed_packet)) -> None:
+    def __init__(self, packet: Pointer["lib.type_sr_datafeed_packet"]) -> None:
         super().__init__(packet)
-        payload = ct.cast(packet.contents.payload, ct.POINTER(lib.sr_datafeed_header))
+        payload = _cast_p(packet.contents.payload, lib.sr_datafeed_header)
         self.feed_version = payload.contents.feed_version
 
     def __repr__(self) -> str:
@@ -335,9 +339,9 @@ class EndPacket(Packet):
 
 
 class LogicPacket(Packet):
-    def __init__(self, packet: ct.POINTER(lib.sr_datafeed_packet)) -> None:
+    def __init__(self, packet: Pointer["lib.type_sr_datafeed_packet"]) -> None:
         super().__init__(packet)
-        payload = ct.cast(packet.contents.payload, ct.POINTER(lib.sr_datafeed_logic))
+        payload = _cast_p(packet.contents.payload, lib.sr_datafeed_logic)
         self.length = payload.contents.length
         self.unitsize = payload.contents.unitsize
         self.data = bytes(
@@ -350,7 +354,7 @@ class LogicPacket(Packet):
         return f"<logic packet {self.data[:8].hex(sep=' ').upper()}... {self.length}>"
 
 
-def parse_packet(packet: ct.POINTER(lib.sr_datafeed_packet)) -> Packet:
+def parse_packet(packet: Pointer["lib.type_sr_datafeed_packet"]) -> Packet:
     if packet.contents.type == lib.SR_DF_HEADER:
         return HeaderPacket(packet)
     if packet.contents.type == lib.SR_DF_END:
@@ -372,30 +376,33 @@ class Sigrok:
     def get_libs_build_info() -> dict[str, str]:
         lib_versions = lib.sr_buildinfo_libs_get().rval
         return {
-            ct.cast(name_version[0], ct.c_char_p).value.decode("utf-8"): ct.cast(
-                name_version[1], ct.c_char_p
-            ).value.decode("utf-8")
+            name.decode("utf-8"): version.decode("utf-8")
             for version_tuple in _consume_g_slist(lib_versions)
             if (name_version := list(_consume_g_slist(version_tuple)))
+            if (name := ct.cast(name_version[0], ct.c_char_p).value)
+            if (version := ct.cast(name_version[1], ct.c_char_p).value)
         }
 
     @staticmethod
     def get_host_build_info() -> str:
-        return ct.cast(lib.sr_buildinfo_host_get().rval, ct.c_char_p).value.decode(
-            "utf-8"
-        )
+        if buildinfo := ct.cast(lib.sr_buildinfo_host_get().rval, ct.c_char_p).value:  # type: ignore[arg-type]
+            return buildinfo.decode("utf-8")
+        return ""
 
     @staticmethod
     def get_scpi_backends_build_info() -> str:
-        return ct.cast(
-            lib.sr_buildinfo_scpi_backends_get().rval, ct.c_char_p
-        ).value.decode("utf-8")
+        if buildinfo := ct.cast(
+            lib.sr_buildinfo_scpi_backends_get().rval,  # type: ignore[arg-type]
+            ct.c_char_p,
+        ).value:
+            return buildinfo.decode("utf-8")
+        return ""
 
     def __init__(self) -> None:
-        self._sr: ct.POINTER(lib.sr_context) | None = None
+        self._sr: Pointer[lib.type_sr_context] | None = None
 
     def init(self) -> None:
-        self._sr = ct.cast(_try(lib.sr_init())["ctx"], ct.POINTER(lib.sr_context))
+        self._sr = _cast_p(_try(lib.sr_init())["ctx"], lib.sr_context)
 
     def exit(self) -> None:
         if self._sr is not None:
@@ -409,7 +416,10 @@ class Sigrok:
         if (ptr := lib.sr_driver_list(self._sr).rval) == 0:
             return []
 
-        drivers = ct.cast(ptr, ct.POINTER(ct.POINTER(lib.sr_dev_driver)))
+        drivers: Iterable[lib.sr_dev_driver] = _cast_p(  # type: ignore[valid-type]
+            ptr,
+            ct.POINTER(lib.sr_dev_driver),  # type: ignore[call-overload]
+        )
         return [
             DeviceDriver(self._sr, driver)
             for driver in itertools.takewhile(lambda drv: drv, drivers)
@@ -427,29 +437,28 @@ class Sigrok:
         devices: Iterable[Device],
     ) -> None:
         session = ct.cast(
-            _try(lib.sr_session_new(self._sr))["session"], ct.POINTER(lib.sr_session)
+            _try(lib.sr_session_new(self._sr))["session"],
+            ct.POINTER(lib.sr_session),  # type: ignore[call-overload]
         )
         try:
             for device in devices:
                 _try(lib.sr_session_dev_add(session, device._dev))  # noqa: SLF001
 
             def wrapper(
-                dev: ct.POINTER(lib.sr_dev_inst),
-                cpacket: ct.POINTER(lib.sr_datafeed_packet),
+                dev: Pointer["lib.type_sr_dev_inst"],
+                cpacket: Pointer["lib.type_sr_datafeed_packet"],
                 _data: ct.c_void_p,
             ) -> None:
-                packet = parse_packet(
-                    ct.cast(cpacket, ct.POINTER(lib.sr_datafeed_packet))
-                )
+                packet = parse_packet(_cast_p(cpacket, lib.sr_datafeed_packet))
                 cont = packet_callback(
-                    Device(dev=ct.cast(dev, ct.POINTER(lib.sr_dev_inst))), packet
+                    Device(dev=_cast_p(dev, lib.sr_dev_inst)), packet
                 )
                 if isinstance(packet, EndPacket):
                     _try(lib.sr_session_datafeed_callback_remove_all(session))
                 elif not cont:
                     _try(lib.sr_session_stop(session))
 
-            fn = lib.sr_session_datafeed_callback_add.arg_types[1](wrapper)
+            fn = lib.sr_session_datafeed_callback_add.arg_types[1](wrapper)  # type: ignore[attr-defined]
             _try(lib.sr_session_datafeed_callback_add(session, fn, None))
 
             _try(lib.sr_session_start(session))

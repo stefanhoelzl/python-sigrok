@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TypeVar
 
 from invoke import Context, task
+from pyclibrary.c_parser import Struct  # type: ignore[import-untyped]
 from pyclibrary.c_parser import Type as CType
 
 from tasks.dev import format_and_lint
@@ -47,17 +48,33 @@ def function_annotations(funcs: dict[str, CType]) -> Iterator[str]:
 
     def return_type_annotation(return_ctype: CType) -> str:
         return_type = return_ctype.type_spec
-        return {"void": "None", "int": "int", "char": "str"}.get(return_type, "None")
+        return {"void": "None", "int": "int", "char": "bytes"}.get(return_type, "None")
 
     for name, func in only_public(funcs):
         ret = return_type_annotation(func.type_spec)
         params = param_annotations(func.declarators[0])
-        yield f"def {name}(self, {','.join(params)}) -> CallResult[{ret}]: ..."
+        yield "@staticmethod"
+        yield f"def {name}({','.join(params)}) -> CallResult[{ret}]: ..."
 
 
-def struct_annotations(structs: dict[str, CType]) -> Iterator[str]:
-    for name, _struct in only_public(structs):
-        yield f"class {name}(NamedTuple): ..."
+def struct_annotations(structs: dict[str, Struct]) -> Iterator[str]:
+    for name, struct in only_public(structs):
+        yield f"class type_{name}(Protocol):"
+        if not struct.members:
+            yield indent("pass")
+        for member in struct.members:
+            if member[0] == "def":
+                continue
+            yield indent(f"{member[0]}: {type_annotation(member[1])}")
+        yield f"{name}: type_{name}"
+
+
+def type_annotation(typ: CType) -> str:
+    if typ.type_spec == "char":
+        return "bytes"
+    if typ.type_spec == "int":
+        return "int"
+    return "Any"
 
 
 def type_annotations(types: dict[str, CType]) -> Iterator[str]:
@@ -69,12 +86,9 @@ def type_annotations(types: dict[str, CType]) -> Iterator[str]:
 def enum_annotations(enums: dict[str, dict[str, int]]) -> Iterator[str]:
     for name, enum in only_public(enums):
         if len(enum) > 0:
-            yield f"class {name}(TypedDict):"
-            for field in enum:
-                yield indent(f"{field}: int")
-            yield f"class __{name}_enum__(IntEnum):"
-            for field in enum:
-                yield indent(f"{field}: int")
+            yield f"class type_{name}(IntEnum):"
+            for field, value in enum.items():
+                yield indent(f"{field} = {value}")
 
 
 @task
@@ -90,7 +104,10 @@ def gen(ctx: Context, clib: str) -> None:
             textwrap.dedent(
                 """
                 from enum import IntEnum
-                from typing import Any, NamedTuple, Generic, TypeVar, TypedDict
+                from typing import Any, Protocol, Generic, TypeVar
+                _T = TypeVar("_T")
+                class Pointer(Protocol[_T]):
+                    contents: _T
                 _R = TypeVar("_R")
                 class CallResult(Generic[_R]):
                     rval: _R
@@ -101,13 +118,12 @@ def gen(ctx: Context, clib: str) -> None:
         stub.write(
             "\n".join(
                 (
-                    f"class {var_name.upper()}:",
+                    f"class {var_name}:",
                     *map(indent, value_annotations(definitions["values"])),
-                    *map(indent, function_annotations(definitions["functions"])),
                     *map(indent, type_annotations(definitions["types"])),
-                    *map(indent, struct_annotations(definitions["structs"])),
                     *map(indent, enum_annotations(definitions["enums"])),
-                    f"{var_name}: {var_name.upper()}",
+                    *map(indent, struct_annotations(definitions["structs"])),
+                    *map(indent, function_annotations(definitions["functions"])),
                 )
             )
         )

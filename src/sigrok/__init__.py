@@ -1,2 +1,1 @@
-from sigrok.bindings import lib as bindings
-from sigrok.libsigrok import *
+from sigrok.sigrok import *

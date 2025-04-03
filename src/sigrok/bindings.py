@@ -1,6 +1,15 @@
+from typing import Protocol, TypeVar
+
 import pkgconfig
 import platformdirs
 from pyclibrary import CLibrary, CParser
+
+_T = TypeVar("_T")
+
+
+class Pointer(Protocol[_T]):
+    contents: _T
+
 
 pkg_config = pkgconfig.variables("libsigrok")
 lib = CLibrary(

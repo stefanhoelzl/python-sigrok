@@ -26,6 +26,9 @@ def format_and_lint(
         f"uv run ruff check {chk_flags} {single_file or ProjectPath}", warn=True
     ).failed
 
+    if not single_file:
+        failed = ctx.run(f"uv run mypy {ProjectPath}", warn=True).failed
+
     if failed:
         sys.exit(1)
 

@@ -101,7 +101,9 @@ class TestDeviceDriver:
             pass
 
     def test_get_scan_options(self, dr: DeviceDriver) -> None:
-        assert set(dr.get_scan_options()) == {
+        scan_options = dr.get_scan_options()
+        assert scan_options is not None
+        assert set(scan_options) == {
             ConfigKey.SR_CONF_LIMIT_FRAMES,
             ConfigKey.SR_CONF_NUM_LOGIC_CHANNELS,
             ConfigKey.SR_CONF_NUM_ANALOG_CHANNELS,
