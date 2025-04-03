@@ -13,6 +13,8 @@ lib = CLibrary(
             f"{pkg_config['includedir']}/glib-2.0/glib/gslist.h",
             f"{pkg_config['includedir']}/glib-2.0/glib/gtypes.h",
             f"{pkg_config['includedir']}/glib-2.0/glib/gvariant.h",
+            f"{pkg_config['includedir']}/glib-2.0/glib/garray.h",
+            f"{pkg_config['includedir']}/glib-2.0/glib/gmain.h",
         ],
         cache=str(
             platformdirs.user_cache_path("python-sigrok", ensure_exists=True)
@@ -20,21 +22,3 @@ lib = CLibrary(
         ),
     ),
 )
-
-"""
-    ret = sr.sr_driver_list(ctx)
-    if ret.rval is None:
-        raise RuntimeError(ret.rval)
-
-    drvs = ct.cast(ret.rval, ct.POINTER(ct.POINTER(sr.sr_dev_driver)))
-
-    for i in itertools.count():
-        if not drvs[i]:
-            break
-
-        print(i, drvs[i].contents.name, drvs[i].contents.longname)  # noqa: T201
-
-    ret = sr.sr_exit(ctx)
-    if ret.rval != 0:
-        raise RuntimeError(ret.rval)
-"""

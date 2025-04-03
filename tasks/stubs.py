@@ -3,6 +3,7 @@ import importlib
 import textwrap
 from collections.abc import Iterator
 from pathlib import Path
+from typing import TypeVar
 
 from invoke import Context, task
 from pyclibrary.c_parser import Type as CType
@@ -14,7 +15,10 @@ def indent(line: str, *, n: int = 1) -> str:
     return textwrap.indent(line, "    " * n)
 
 
-def only_public(items: dict[str, CType]) -> Iterator[tuple[str, CType]]:
+T = TypeVar("T")
+
+
+def only_public(items: dict[str, T]) -> Iterator[tuple[str, T]]:
     for name, value in items.items():
         if name.startswith("_"):
             continue
@@ -60,8 +64,17 @@ def type_annotations(types: dict[str, CType]) -> Iterator[str]:
     for name, typ in only_public(types):
         if len(typ.declarators) == 0:
             yield f"{name}: None"
-        elif len(typ.declarators) == 1 and typ.declarators[0] != "*":
-            yield f"{typ.declarators[0]}: Any"
+
+
+def enum_annotations(enums: dict[str, dict[str, int]]) -> Iterator[str]:
+    for name, enum in only_public(enums):
+        if len(enum) > 0:
+            yield f"class {name}(TypedDict):"
+            for field in enum:
+                yield indent(f"{field}: int")
+            yield f"class __{name}_enum__(IntEnum):"
+            for field in enum:
+                yield indent(f"{field}: int")
 
 
 @task
@@ -76,7 +89,8 @@ def gen(ctx: Context, clib: str) -> None:
         stub.write(
             textwrap.dedent(
                 """
-                from typing import Any, NamedTuple, Generic, TypeVar
+                from enum import IntEnum
+                from typing import Any, NamedTuple, Generic, TypeVar, TypedDict
                 _R = TypeVar("_R")
                 class CallResult(Generic[_R]):
                     rval: _R
@@ -90,8 +104,9 @@ def gen(ctx: Context, clib: str) -> None:
                     f"class {var_name.upper()}:",
                     *map(indent, value_annotations(definitions["values"])),
                     *map(indent, function_annotations(definitions["functions"])),
-                    *map(indent, struct_annotations(definitions["structs"])),
                     *map(indent, type_annotations(definitions["types"])),
+                    *map(indent, struct_annotations(definitions["structs"])),
+                    *map(indent, enum_annotations(definitions["enums"])),
                     f"{var_name}: {var_name.upper()}",
                 )
             )
