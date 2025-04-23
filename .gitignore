@@ -5,3 +5,4 @@ mxe-build/dist/
 .idea/
 dist/
 uv.lock
+__pycache__
