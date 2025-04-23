@@ -147,22 +147,17 @@ EOF
 # The file python34.zip contains all files from the 'DLLs', 'Lib', and 'libs'
 # subdirectories from an installed Python on Windows (c:\python34), i.e. some
 # libraries and all Python stdlib modules.
-cp "${BASE_DIR}/contrib-mxe/python34_$TARGET.dll" "${DIST_DIR}/python34.dll"
-cp "${BASE_DIR}/contrib-mxe/python34_$TARGET.zip" "${DIST_DIR}/python34.zip"
+cp "${BASE_DIR}/contrib-mxe/python34_$TARGET.dll" "${INSTALL_DIR}/python34.dll"
+cp "${BASE_DIR}/contrib-mxe/python34_$TARGET.zip" "${INSTALL_DIR}/python34.zip"
 
-# In order to link against Python we need libpython34.a.
-# The upstream Python 32bit installer ships this, the x86_64 installer
-# doesn't. Thus, we generate the file manually here.
-if [ "${TARGET}" = "x86_64" ]; then
-	cp "${DIST_DIR}/python34.dll" .
-	"${USR_DIR}/${TARGET}-w64-mingw32.static.posix/bin/gendef" python34.dll
-	"${USR_DIR}/bin/${TARGET}-w64-mingw32.static.posix-dlltool" \
-		--dllname python34.dll --def python34.def \
-		--output-lib libpython34.a
-	mkdir -p "${DIST_DIR}/Python34/libs"
-	mv -f libpython34.a "${DIST_DIR}/Python34/libs"
-	rm -f python34.dll
-fi
+cp "${INSTALL_DIR}/python34.dll" .
+"${USR_DIR}/${TARGET}-w64-mingw32.static.posix/bin/gendef" python34.dll
+"${USR_DIR}/bin/${TARGET}-w64-mingw32.static.posix-dlltool" \
+  --dllname python34.dll --def python34.def \
+  --output-lib libpython34.a
+mkdir -p "${DIST_DIR}/Python34/libs"
+mv -f libpython34.a "${DIST_DIR}/Python34/libs"
+rm -f python34.dll
 
 # We need to include the *.pyd files from python34.zip into the installers,
 # otherwise importing certain modules (e.g. ctypes) won't work (bug #1409).
@@ -224,7 +219,7 @@ cd ..
 ${USR_DIR}/bin/${MXE_TARGET}-gcc -O2 -shared \
   -o "${DIST_DIR}/libsigrokdecode.dll" \
   -Wl,--whole-archive -lsigrokdecode \
-  -Wl,--no-whole-archive -L${USR_DIR}/x86_64-w64-mingw32.static.posix/Python34/libs -lpython34 \
+  -Wl,--no-whole-archive -L${USR_DIR}/${TARGET}-w64-mingw32.static.posix/Python34/libs -lpython34 \
   -Wl,--no-whole-archive -lglib-2.0 \
   -Wl,--no-whole-archive -lws2_32 \
   -Wl,--no-whole-archive -lintl \
