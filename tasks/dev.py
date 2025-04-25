@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
 import sys
+import urllib.request
 
 import pytest
+import tomlkit
 from invoke import Context, task
 
-from tasks.common import ProjectPath, TestsPath
+from tasks.common import ProjectPath, PyProjectPath, TestsPath
 
 
 @task
@@ -37,3 +40,26 @@ def format_and_lint(
 @task
 def tests(_: Context) -> None:
     sys.exit(pytest.main(TestsPath))
+
+
+@task
+def update_version(_: Context) -> None:
+    with PyProjectPath.open(mode="rb") as fh:
+        pyproject = tomlkit.load(fh)
+
+    name = pyproject["project"]["name"]  # type: ignore[index]
+    version = pyproject["project"]["version"]  # type: ignore[index]
+
+    with urllib.request.urlopen(f"https://test.pypi.org/pypi/{name}/json") as f:
+        releases = set(json.load(f).get("releases", {}).keys())
+
+    build_nr = sum(
+        1
+        for release in releases
+        if release == version or release.startswith(f"{version}.post")
+    )
+
+    pyproject["project"]["version"] = f"{version}.post{build_nr}"  # type: ignore[index]
+
+    with PyProjectPath.open(mode="w") as fh:
+        tomlkit.dump(pyproject, fh)

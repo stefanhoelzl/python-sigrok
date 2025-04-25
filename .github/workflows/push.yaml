@@ -50,6 +50,8 @@ jobs:
 
       - run: uv run inv dev.format-and-lint --ci
 
+      - if: github.ref_name == 'main'
+        run: uv run inv dev.update-version
       - run: uv build --wheel
       - run: unzip -l dist/*.whl
 
@@ -106,3 +108,23 @@ jobs:
       - run: uv pip install sigrok-*.whl
         shell: bash
       - run: uv run --no-project inv dev.tests
+
+  publish-test:
+    needs: [test]
+    if: github.ref_name == 'main'
+    name: Publish to TestPyPI
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheel
+          path: dist
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
