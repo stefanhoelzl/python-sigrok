@@ -11,11 +11,12 @@ dependencies = [
     "pyclibrary>=0.2.2",
     "platformdirs>=4.3.7",
     "pkgconfig>=1.5.5; sys_platform != 'windows'",
+    "typing-extensions>=4.13.2",
 ]
 
 [dependency-groups]
 dev = [
-    "ruff==0.11.2",
+    "ruff==0.11.7",
     "invoke==2.2.0",
     "types-invoke==2.0.0.10",
     "pytest==8.3.5",
@@ -43,6 +44,10 @@ ignore = [
     "COM812",
     # line to long handled by ruff format
     "E501",
+    # f-string literal as exception message
+    "EM102",
+    # long exception messages
+    "TRY003",
 ]
 [tool.ruff.lint.per-file-ignores]
 "src/sigrok/__init__.py" = [
@@ -70,6 +75,15 @@ ignore = [
 strict = true
 exclude = ["mxe-build"]
 
+[tool.pytest.ini_options]
+addopts = "-v"
+
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling==1.27.0"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+artifacts = [
+    "*.dll",
+    "*.h",
+]

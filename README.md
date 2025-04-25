@@ -7,6 +7,25 @@ Python-API for [libsigrok](https://sigrok.org/wiki/Libsigrok)
 pip install pip install sigrok@git+https://github.com/stefanhoelzl/python-sigrok/
 ```
 
+### Requirements
+#### Ubuntu
+```bash
+apt install libsigrok4 libsigrok-dev
+```
+
+### Fedora
+```bash
+dnf install libsigrok libsigrok-devel
+```
+
+#### macOS
+```bash
+brew install libsigrok
+```
+
+#### Windows
+pre-built libsigrok dlls are shipped with this package.
+
 ## Usage
 ```python
 from sigrok import Sigrok, Device, Packet, LogicPacket
@@ -27,15 +46,4 @@ with (
 ):
     device.enable_channels("D0")
     sr.run(cb, [device])
-```
-
-## Requirements
-### Ubuntu/Debian
-```bash
-apt-get install libsigrok4 libsigrok-dev pkgconf
-```
-
-### Fedora
-```bash
-dnf install libsigrok libsigrok-devel pkgconf
 ```

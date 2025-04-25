@@ -1,10 +1,11 @@
+from __future__ import annotations
+
 import sys
-from pathlib import Path
 
 import pytest
 from invoke import Context, task
 
-ProjectPath = Path(__file__).parent.parent
+from tasks.common import ProjectPath, TestsPath
 
 
 @task
@@ -27,7 +28,7 @@ def format_and_lint(
     ).failed
 
     if not single_file:
-        failed = ctx.run(f"uv run mypy {ProjectPath}", warn=True).failed
+        failed |= ctx.run(f"uv run mypy {ProjectPath}", warn=True).failed
 
     if failed:
         sys.exit(1)
@@ -35,4 +36,4 @@ def format_and_lint(
 
 @task
 def tests(_: Context) -> None:
-    pytest.main(ProjectPath / "tests")
+    sys.exit(pytest.main(TestsPath))

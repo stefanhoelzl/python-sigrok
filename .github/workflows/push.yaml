@@ -1,22 +1,108 @@
-name: per-commit-checks
-
 on: push
 
 jobs:
-  checks:
-    runs-on: ubuntu-22.04
+  build-windows-dlls:
+    strategy:
+      matrix:
+        include:
+          - { target: x86_64 }
+          - { target: i686 }
+
+    runs-on: ubuntu-24.04
+
     steps:
-      - run: sudo apt-get install -y libsigrok4 libsigrok-dev
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v3
+        id: cache
+        with:
+          key: win-dll-${{ matrix.target }}-${{ hashFiles('mxe-build/**/*') }}
+          path: ./mxe-build/dist
+
+      - if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          TARGET: "${{ matrix.target }}"
+        run: ./build.sh
+        working-directory: ./mxe-build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libsigrok-windows-${{matrix.target}}
+          path: ./mxe-build/dist/**/*
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    needs: [build-windows-dlls]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: sudo apt-get install -y libsigrok-dev
 
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v6
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: libsigrok-*
+          path: src/sigrok
 
       - run: uv run inv stubs.bindings
+
       - run: uv run inv dev.format-and-lint --ci
-      - run: uv build
-      - run: uv run inv dev.tests
+
+      - run: uv build --wheel
+      - run: unzip -l dist/*.whl
 
       - uses: actions/upload-artifact@v4
         with:
           name: wheel
           path: dist/*.whl
+
+  test:
+    needs: [build]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-22.04
+        python:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
+        include:
+          - os: ubuntu-22.04-arm
+            python: "3.13"
+          - os: windows-2025
+            python: "cpython-3.13-windows-x86-none"
+          - os: windows-2025
+            python: "3.13"
+          # DISABLED BECAUSE OF SEGFAULTS
+          # - os: macos-15
+          #   python: "3.13"
+          # - os: ubuntu-24.04
+          #   python: "3.13"
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - if: startsWith(matrix.os, 'ubuntu')
+        run: sudo apt-get install -y libsigrok4 libsigrok-dev
+
+      - if: startsWith(matrix.os, 'macos')
+        run: brew install libsigrok
+
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheel
+
+      - run: uv sync --only-group=dev
+      - run: uv pip install sigrok-*.whl
+        shell: bash
+      - run: uv run --no-project inv dev.tests

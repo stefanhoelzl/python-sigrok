@@ -50,6 +50,9 @@ mkdir -p "${DIST_DIR}"
 
 cd $BUILD_DIR
 
+# WORKAROUND WHEN RUNNING AS ROOT IN A CONTAINER
+apt-get update && apt-get install sudo || true
+
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends \
 		sudo \
@@ -84,6 +87,10 @@ sudo apt-get install -y --no-install-recommends \
 		wget \
 		xz-utils
 
+#
+# MXE BUILD
+#
+
 test -d ${MXE_DIR} || ${GIT_CLONE} ${MXE_REPO} ${MXE_DIR}
 cd ${MXE_DIR}
 ${GIT_CLEAN}
@@ -110,7 +117,91 @@ make -j$(nproc) \
     libieee1284 \
     nettle
 
+mkdir -p "${DIST_DIR}/include/glib"
+cp -R "${INSTALL_DIR}/include/glib-2.0/glib/"*.h "${DIST_DIR}/include/glib"
+
 cd ${BUILD_DIR}
+
+#
+# LIBSERIALPORT
+#
+test -d libserialport || ${GIT_CLONE} ${LIBSERIALPORT_REPO} libserialport
+cd libserialport
+${GIT_RESET} ${LIBSERIALPORT_REF}
+./autogen.sh
+./configure ${C} ${L}
+make ${PARALLEL}
+make install
+cd ..
+
+#
+# LIBSIGROK
+#
+test -d libsigrok || ${GIT_CLONE} ${LIBSIGROK_REPO} libsigrok
+cd libsigrok
+${GIT_RESET} ${LIBSIGROK_REF}
+./autogen.sh
+./configure ${C} ${L} --disable-python
+make ${PARALLEL}
+make install
+cd ..
+
+${USR_DIR}/bin/${MXE_TARGET}-gcc -O2 -shared \
+  -o "${DIST_DIR}/libsigrok.dll" \
+  -Wl,--export-all-symbols \
+  -Wl,--whole-archive \
+  -lsigrok \
+  -Wl,--no-whole-archive \
+  -lglib-2.0 \
+  -lgio-2.0 \
+  -lserialport \
+  -lusb-1.0 \
+  -lieee1284 \
+  -lftdi1 \
+  -lhidapi \
+  -lnettle \
+  -lzip \
+  -lz \
+  -lbz2 \
+  -lbcrypt \
+  -lpcre \
+  -lintl \
+  -liconv \
+  -lws2_32 \
+  -lsetupapi \
+  -lole32 \
+  -lwinmm
+
+mkdir -p "${DIST_DIR}/include/libsigrok"
+cp -R "${INSTALL_DIR}/include/libsigrok/"*.h "${DIST_DIR}/include/libsigrok"
+
+#
+# SIGROK_FIRMWARE
+#
+test -d sigrok-firmware || $GIT_CLONE ${SIGROK_FIRMWARE_REPO} sigrok-firmware
+cd sigrok-firmware
+${GIT_RESET} ${SIGROK_FIRMWARE_REF}
+./autogen.sh
+./configure --prefix="${DIST_DIR}"
+# make install
+cd ..
+
+#
+# SIGROK_FIRMWARE_FX2LAFW
+#
+test -d sigrok-firmware-fx2lafw || ${GIT_CLONE} ${SIGROK_FIRMWARE_FX2LAFW_REPO} sigrok-firmware-fx2lafw
+cd sigrok-firmware-fx2lafw
+${GIT_RESET} ${SIGROK_FIRMWARE_FX2LAFW_REF}
+./autogen.sh
+# We're building the fx2lafw firmware on the host, no need to cross-compile.
+./configure --prefix="${DIST_DIR}"
+make ${PARALLEL}
+# make install
+cd ..
+
+#
+# LIBSIGROKDECODE
+#
 
 # Cross-compiling Python is highly non-trivial, so we avoid it for now.
 # The Python32.tar.gz file below is a repackaged tarball of the official
@@ -155,58 +246,14 @@ cp "${INSTALL_DIR}/python34.dll" .
 "${USR_DIR}/bin/${TARGET}-w64-mingw32.static.posix-dlltool" \
   --dllname python34.dll --def python34.def \
   --output-lib libpython34.a
-mkdir -p "${DIST_DIR}/Python34/libs"
-mv -f libpython34.a "${DIST_DIR}/Python34/libs"
+# mkdir -p "${DIST_DIR}/Python34/libs"
+# mv -f libpython34.a "${DIST_DIR}/Python34/libs"
 rm -f python34.dll
 
 # We need to include the *.pyd files from python34.zip into the installers,
 # otherwise importing certain modules (e.g. ctypes) won't work (bug #1409).
-unzip -q "${INSTALL_DIR}/python34.zip" *.pyd -d "${DIST_DIR}/Python34"
+# unzip -q "${INSTALL_DIR}/python34.zip" *.pyd -d "${DIST_DIR}/Python34"
 
-# libserialport
-test -d libserialport || ${GIT_CLONE} ${LIBSERIALPORT_REPO} libserialport
-cd libserialport
-${GIT_RESET} ${LIBSERIALPORT_REF}
-./autogen.sh
-./configure ${C} ${L}
-make ${PARALLEL}
-make install
-cd ..
-
-# libsigrok
-test -d libsigrok || ${GIT_CLONE} ${LIBSIGROK_REPO} libsigrok
-cd libsigrok
-${GIT_RESET} ${LIBSIGROK_REF}
-./autogen.sh
-./configure ${C} ${L} --disable-python
-make ${PARALLEL}
-make install
-cd ..
-
-${USR_DIR}/bin/${MXE_TARGET}-gcc -O2 -shared \
-  -o "${DIST_DIR}/libsigrok.dll" \
-  -Wl,--whole-archive -lsigrok \
-  -Wl,--no-whole-archive -lglib-2.0 \
-  -Wl,--no-whole-archive -lgio-2.0 \
-  -Wl,--no-whole-archive -lserialport \
-  -Wl,--no-whole-archive -lusb-1.0 \
-  -Wl,--no-whole-archive -lieee1284 \
-  -Wl,--no-whole-archive -lftdi1 \
-  -Wl,--no-whole-archive -lhidapi \
-  -Wl,--no-whole-archive -lnettle \
-  -Wl,--no-whole-archive -lzip \
-  -Wl,--no-whole-archive -lz \
-  -Wl,--no-whole-archive -lbz2 \
-  -Wl,--no-whole-archive -lbcrypt \
-  -Wl,--no-whole-archive -lpcre \
-  -Wl,--no-whole-archive -lintl \
-  -Wl,--no-whole-archive -liconv \
-  -Wl,--no-whole-archive -lws2_32 \
-  -Wl,--no-whole-archive -lsetupapi \
-  -Wl,--no-whole-archive -lole32 \
-  -Wl,--no-whole-archive -lwinmm
-
-# libsigrokdecode
 test -d libsigrokdecode || ${GIT_CLONE} ${LIBSIGROKDECODE_REPO} libsigrokdecode
 cd libsigrokdecode
 ${GIT_RESET} ${LIBSIGROKDECODE_REF}
@@ -216,33 +263,16 @@ make ${PARALLEL}
 make install
 cd ..
 
-${USR_DIR}/bin/${MXE_TARGET}-gcc -O2 -shared \
-  -o "${DIST_DIR}/libsigrokdecode.dll" \
-  -Wl,--whole-archive -lsigrokdecode \
-  -Wl,--no-whole-archive -L${USR_DIR}/${TARGET}-w64-mingw32.static.posix/Python34/libs -lpython34 \
-  -Wl,--no-whole-archive -lglib-2.0 \
-  -Wl,--no-whole-archive -lws2_32 \
-  -Wl,--no-whole-archive -lintl \
-  -Wl,--no-whole-archive -lwinmm \
-  -Wl,--no-whole-archive -lole32 \
-  -Wl,--no-whole-archive -liconv
-
-# sigrok-firmware
-test -d sigrok-firmware || $GIT_CLONE ${SIGROK_FIRMWARE_REPO} sigrok-firmware
-cd sigrok-firmware
-${GIT_RESET} ${SIGROK_FIRMWARE_REF}
-./autogen.sh
-./configure --prefix="${DIST_DIR}"
-make install
-cd ..
-
-# sigrok-firmware-fx2lafw
-test -d sigrok-firmware-fx2lafw || ${GIT_CLONE} ${SIGROK_FIRMWARE_FX2LAFW_REPO} sigrok-firmware-fx2lafw
-cd sigrok-firmware-fx2lafw
-${GIT_RESET} ${SIGROK_FIRMWARE_FX2LAFW_REF}
-./autogen.sh
-# We're building the fx2lafw firmware on the host, no need to cross-compile.
-./configure --prefix="${DIST_DIR}"
-make ${PARALLEL}
-make install
-cd ..
+# ${USR_DIR}/bin/${MXE_TARGET}-gcc -O2 -shared \
+#   -o "${DIST_DIR}/libsigrokdecode.dll" \
+#   -Wl,--export-all-symbols \
+#   -Wl,--whole-archive \
+#   -lsigrokdecode \
+#   -Wl,--no-whole-archive \
+#   -L${USR_DIR}/${TARGET}-w64-mingw32.static.posix/Python34/libs -lpython34 \
+#   -lglib-2.0 \
+#   -lws2_32 \
+#   -lintl \
+#   -lwinmm \
+#   -lole32 \
+#   -liconv

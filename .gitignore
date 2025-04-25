@@ -1,4 +1,5 @@
 *.pyi
+*.dll
 
 mxe-build/build/
 mxe-build/dist/

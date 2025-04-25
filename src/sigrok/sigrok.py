@@ -1,15 +1,20 @@
+from __future__ import annotations
+
 import abc
 import ctypes as ct
 import enum
 import itertools
-from collections.abc import Callable, Iterable, Iterator
 from contextlib import suppress
-from types import TracebackType
-from typing import TYPE_CHECKING, Any, ClassVar, Self
-
-from pyclibrary.c_library import CallResult  # type: ignore[import-untyped]
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from sigrok.bindings import Pointer, lib
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Iterator
+    from types import TracebackType
+
+    from pyclibrary.c_library import CallResult  # type: ignore[import-untyped]
+    from typing_extensions import Self
 
 
 class SigrokError(Exception):
@@ -20,7 +25,7 @@ class SigrokCError(SigrokError, metaclass=abc.ABCMeta):
     Code: int
     Message: str
 
-    ErrorClasses: ClassVar[dict[int, type["SigrokCError"]]] = {}
+    ErrorClasses: ClassVar[dict[int, type[SigrokCError]]] = {}
 
     def __init_subclass__(cls) -> None:
         super().__init_subclass__()
@@ -28,7 +33,7 @@ class SigrokCError(SigrokError, metaclass=abc.ABCMeta):
             cls.ErrorClasses[cls.Code] = cls
 
     @classmethod
-    def from_error_code(cls, code: int, *, hint: str) -> "SigrokCError":
+    def from_error_code(cls, code: int, *, hint: str) -> SigrokCError:
         if error_class := cls.ErrorClasses.get(code):
             return error_class(hint=hint)
         return SigrokCUnknownError(code, hint=hint)
@@ -145,7 +150,7 @@ class ChannelType(enum.IntEnum):
 
 
 class Channel:
-    def __init__(self, ch: Pointer["lib.type_sr_channel"]) -> None:
+    def __init__(self, ch: Pointer[lib.type_sr_channel]) -> None:
         self._ch = ch
 
     @property
@@ -192,7 +197,7 @@ else:
 
 
 class Device:
-    def __init__(self, dev: Pointer["lib.type_sr_dev_inst"]) -> None:
+    def __init__(self, dev: Pointer[lib.type_sr_dev_inst]) -> None:
         self._dev = dev
 
     @property
@@ -250,7 +255,7 @@ class Device:
     def close(self) -> None:
         _try(lib.sr_dev_close(self._dev))
 
-    def __enter__(self) -> "Device":
+    def __enter__(self) -> Self:
         self.open()
         return self
 
@@ -268,7 +273,7 @@ class Device:
 
 class DeviceDriver:
     def __init__(
-        self, sr: Pointer["lib.type_sr_context"], dr: Pointer["lib.type_sr_dev_driver"]
+        self, sr: Pointer[lib.type_sr_context], dr: Pointer[lib.type_sr_dev_driver]
     ) -> None:
         self._sr = sr
         self._dr: Pointer[lib.type_sr_dev_driver] = _cast_p(dr, lib.sr_dev_driver)
@@ -316,7 +321,7 @@ class DeviceDriver:
 
 
 class Packet:
-    def __init__(self, packet: Pointer["lib.type_sr_datafeed_packet"]) -> None:
+    def __init__(self, packet: Pointer[lib.type_sr_datafeed_packet]) -> None:
         self.type = packet.contents.type
 
     def __repr__(self) -> str:
@@ -324,7 +329,7 @@ class Packet:
 
 
 class HeaderPacket(Packet):
-    def __init__(self, packet: Pointer["lib.type_sr_datafeed_packet"]) -> None:
+    def __init__(self, packet: Pointer[lib.type_sr_datafeed_packet]) -> None:
         super().__init__(packet)
         payload = _cast_p(packet.contents.payload, lib.sr_datafeed_header)
         self.feed_version = payload.contents.feed_version
@@ -339,7 +344,7 @@ class EndPacket(Packet):
 
 
 class LogicPacket(Packet):
-    def __init__(self, packet: Pointer["lib.type_sr_datafeed_packet"]) -> None:
+    def __init__(self, packet: Pointer[lib.type_sr_datafeed_packet]) -> None:
         super().__init__(packet)
         payload = _cast_p(packet.contents.payload, lib.sr_datafeed_logic)
         self.length = payload.contents.length
@@ -354,7 +359,7 @@ class LogicPacket(Packet):
         return f"<logic packet {self.data[:8].hex(sep=' ').upper()}... {self.length}>"
 
 
-def parse_packet(packet: Pointer["lib.type_sr_datafeed_packet"]) -> Packet:
+def parse_packet(packet: Pointer[lib.type_sr_datafeed_packet]) -> Packet:
     if packet.contents.type == lib.SR_DF_HEADER:
         return HeaderPacket(packet)
     if packet.contents.type == lib.SR_DF_END:
@@ -445,8 +450,8 @@ class Sigrok:
                 _try(lib.sr_session_dev_add(session, device._dev))  # noqa: SLF001
 
             def wrapper(
-                dev: Pointer["lib.type_sr_dev_inst"],
-                cpacket: Pointer["lib.type_sr_datafeed_packet"],
+                dev: Pointer[lib.type_sr_dev_inst],
+                cpacket: Pointer[lib.type_sr_datafeed_packet],
                 _data: ct.c_void_p,
             ) -> None:
                 packet = parse_packet(_cast_p(cpacket, lib.sr_datafeed_packet))
