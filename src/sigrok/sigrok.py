@@ -3,8 +3,10 @@ from __future__ import annotations
 import abc
 import ctypes as ct
 import enum
+import importlib.resources
 import itertools
 import logging
+import os
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -12,6 +14,7 @@ from sigrok.bindings import Pointer, lib
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
+    from pathlib import Path
     from types import TracebackType
 
     from pyclibrary.c_library import CallResult  # type: ignore[import-untyped]
@@ -439,12 +442,22 @@ class Sigrok:
             return buildinfo.decode("utf-8")
         return ""
 
-    def __init__(self, *, redirect_logging: bool = True, log_level: int = 5) -> None:
+    def __init__(
+        self,
+        *,
+        redirect_logging: bool = True,
+        log_level: int = 5,
+        firmware_path: Path | None = None,
+    ) -> None:
         self._sr: Pointer[lib.type_sr_context] | None = None
 
         if redirect_logging:
             _try(lib.sr_log_callback_set(c_log_callback, None))
             _try(lib.sr_log_loglevel_set(log_level))
+
+        if firmware_path is None:
+            firmware_path = importlib.resources.path("sigrok", "firmware").__enter__()
+        os.environ["SIGROK_FIRMWARE_DIR"] = str(firmware_path.absolute())
 
     def init(self) -> None:
         self._sr = _cast_p(_try(lib.sr_init())["ctx"], lib.sr_context)

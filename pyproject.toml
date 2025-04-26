@@ -74,7 +74,10 @@ ignore = [
 
 [tool.mypy]
 strict = true
-exclude = ["mxe-build"]
+exclude = [
+    "mxe-build",
+    "firmware-build",
+]
 
 [tool.pytest.ini_options]
 addopts = "-v"
@@ -87,4 +90,6 @@ build-backend = "hatchling.build"
 artifacts = [
     "*.dll",
     "*.h",
+    "*.fw",
+    "*.rbf",
 ]

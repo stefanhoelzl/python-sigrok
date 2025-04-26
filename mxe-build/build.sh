@@ -23,12 +23,6 @@ export LIBSIGROK_REPO="https://github.com/sigrokproject/libsigrok.git"
 export LIBSIGROK_REF="f06f788118191d19fdbbb37046d3bd5cec91adb1"
 export LIBSIGROKDECODE_REPO="https://github.com/sigrokproject/libsigrokdecode.git"
 export LIBSIGROKDECODE_REF="71f451443029322d57376214c330b518efd84f88"
-export SIGROK_FIRMWARE_REPO="https://github.com/sigrokproject/sigrok-firmware.git"
-export SIGROK_FIRMWARE_REF="11eed913a9c535b87b5d5b5b92d2622cf34cee8b"
-export SIGROK_FIRMWARE_FX2LAFW_REPO="https://github.com/sigrokproject/sigrok-firmware-fx2lafw.git"
-export SIGROK_FIRMWARE_FX2LAFW_REF="0f2d3242ffb5582e5b9a018ed9ae9812d517a56e"
-export SIGROK_DUMPS_REPO="https://github.com/sigrokproject/sigrok-dumps.git"
-export SIGROK_DUMPS_REF="0ad13477abc959d37fc9a5acbd23901c371c9c76"
 
 export DEBUG=0
 export PARALLEL="-j$(nproc)"
@@ -55,7 +49,6 @@ apt-get update && apt-get install sudo || true
 
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends \
-		sudo \
 		autoconf \
 		automake \
 		autopoint \
@@ -66,7 +59,6 @@ sudo apt-get install -y --no-install-recommends \
 		g++ \
 		g++-multilib \
 		gtk-doc-tools \
-		sdcc \
 		gettext \
 		git \
 		intltool \
@@ -174,30 +166,6 @@ ${USR_DIR}/bin/${MXE_TARGET}-gcc -O2 -shared \
 
 mkdir -p "${DIST_DIR}/include/libsigrok"
 cp -R "${INSTALL_DIR}/include/libsigrok/"*.h "${DIST_DIR}/include/libsigrok"
-
-#
-# SIGROK_FIRMWARE
-#
-test -d sigrok-firmware || $GIT_CLONE ${SIGROK_FIRMWARE_REPO} sigrok-firmware
-cd sigrok-firmware
-${GIT_RESET} ${SIGROK_FIRMWARE_REF}
-./autogen.sh
-./configure --prefix="${DIST_DIR}"
-# make install
-cd ..
-
-#
-# SIGROK_FIRMWARE_FX2LAFW
-#
-test -d sigrok-firmware-fx2lafw || ${GIT_CLONE} ${SIGROK_FIRMWARE_FX2LAFW_REPO} sigrok-firmware-fx2lafw
-cd sigrok-firmware-fx2lafw
-${GIT_RESET} ${SIGROK_FIRMWARE_FX2LAFW_REF}
-./autogen.sh
-# We're building the fx2lafw firmware on the host, no need to cross-compile.
-./configure --prefix="${DIST_DIR}"
-make ${PARALLEL}
-# make install
-cd ..
 
 #
 # LIBSIGROKDECODE

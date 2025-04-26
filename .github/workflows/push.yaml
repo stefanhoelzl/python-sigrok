@@ -1,6 +1,29 @@
 on: push
 
 jobs:
+  build-firmware:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v3
+        id: cache
+        with:
+          key: firmware-${{ hashFiles('firmware-build/**/*') }}
+          path: ./firmware-build/dist
+
+      - if: steps.cache.outputs.cache-hit != 'true'
+        run: ./build.sh
+        working-directory: ./firmware-build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sigrok-firmware
+          path: ./firmware-build/dist/share/sigrok-firmware/*
+          if-no-files-found: error
+          retention-days: 1
+
   build-windows-dlls:
     strategy:
       matrix:
@@ -33,7 +56,7 @@ jobs:
           retention-days: 1
 
   build:
-    needs: [build-windows-dlls]
+    needs: [build-windows-dlls, build-firmware]
     runs-on: ubuntu-24.04
     steps:
       - run: sudo apt-get install -y libsigrok-dev

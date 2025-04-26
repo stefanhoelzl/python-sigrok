@@ -1,8 +1,13 @@
 *.pyi
 *.dll
+src/sigrok/firmware
 
 mxe-build/build/
 mxe-build/dist/
+
+firmware-build/build/
+firmware-build/dist/
+
 .idea/
 dist/
 uv.lock
