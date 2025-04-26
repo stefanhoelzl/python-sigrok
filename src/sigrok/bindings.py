@@ -5,6 +5,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Literal, NamedTuple, Protocol, TypeVar
 
+import pkgconfig
 import platformdirs
 from pyclibrary import CLibrary, CParser
 
@@ -44,8 +45,6 @@ def platform_lib_paths() -> Iterator[LibPaths]:
                 glib_includes=dll_path / "include/glib",
             )
     else:
-        import pkgconfig
-
         libsigrok_config = pkgconfig.variables("libsigrok")
         glib_config = pkgconfig.variables("glib-2.0")
 
