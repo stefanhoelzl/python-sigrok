@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Iterator
 
 import pytest
@@ -191,6 +192,23 @@ class TestChannel:
     def test_disable(self, ch: Channel) -> None:
         ch.disable()
         assert ch.enabled is False
+
+
+class TestLogging:
+    def test_logs_messages(self, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.DEBUG):
+            Sigrok()
+        assert caplog.records
+
+    def test_adhere_to_log_level(self, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.INFO):
+            Sigrok()
+        assert not caplog.records
+
+    def test_logger_name(self, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.DEBUG, "sigrok.log"):
+            Sigrok()
+        assert caplog.records
 
 
 class TestRun:

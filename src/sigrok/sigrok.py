@@ -4,6 +4,7 @@ import abc
 import ctypes as ct
 import enum
 import itertools
+import logging
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -15,6 +16,9 @@ if TYPE_CHECKING:
 
     from pyclibrary.c_library import CallResult  # type: ignore[import-untyped]
     from typing_extensions import Self
+
+
+sigrok_logger = logging.getLogger("sigrok")
 
 
 class SigrokError(Exception):
@@ -376,6 +380,38 @@ class SigrokDriverNotFoundError(SigrokError):
         self.drivers = drivers
 
 
+LogLevelMapping = {
+    lib.SR_LOG_ERR: logging.ERROR,
+    lib.SR_LOG_WARN: logging.WARNING,
+    lib.SR_LOG_INFO: logging.INFO,
+    lib.SR_LOG_DBG: logging.DEBUG,
+    lib.SR_LOG_SPEW: logging.DEBUG,
+}
+
+
+def log_callback(_data: None, level: int, log: bytes, args: int) -> int:
+    log_level = LogLevelMapping.get(level, logging.DEBUG)
+    logger = sigrok_logger
+
+    buf = (ct.c_char * 1024)()
+    lib.sr_vsprintf_ascii(buf, log, args)
+
+    logger_message = buf.value.decode("utf-8").split(": ", maxsplit=1)
+    if len(logger_message) == 1:
+        message = logger_message[0]
+        logger = sigrok_logger
+    else:
+        message = logger_message[1]
+        logger = logger.getChild(logger_message[0])
+
+    logger.log(log_level, message)
+
+    return 0
+
+
+c_log_callback = lib.sr_log_callback_set.arg_types[0](log_callback)  # type: ignore[attr-defined]
+
+
 class Sigrok:
     @staticmethod
     def get_libs_build_info() -> dict[str, str]:
@@ -403,8 +439,12 @@ class Sigrok:
             return buildinfo.decode("utf-8")
         return ""
 
-    def __init__(self) -> None:
+    def __init__(self, *, redirect_logging: bool = True, log_level: int = 5) -> None:
         self._sr: Pointer[lib.type_sr_context] | None = None
+
+        if redirect_logging:
+            _try(lib.sr_log_callback_set(c_log_callback, None))
+            _try(lib.sr_log_loglevel_set(log_level))
 
     def init(self) -> None:
         self._sr = _cast_p(_try(lib.sr_init())["ctx"], lib.sr_context)

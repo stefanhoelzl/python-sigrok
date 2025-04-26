@@ -57,7 +57,10 @@ def platform_lib_paths() -> Iterator[LibPaths]:
         )
 
 
-with platform_lib_paths() as lib_paths:
+with (
+    platform_lib_paths() as lib_paths,
+    importlib.resources.path("sigrok", "include") as package_includes,
+):
     lib = CLibrary(
         str(lib_paths.libsigrok.absolute()),
         CParser(
@@ -70,6 +73,7 @@ with platform_lib_paths() as lib_paths:
                 str(lib_paths.glib_includes.absolute() / "gvariant.h"),
                 str(lib_paths.glib_includes.absolute() / "garray.h"),
                 str(lib_paths.glib_includes.absolute() / "gmain.h"),
+                str(package_includes.absolute() / "stdarg.h"),
             ],
             cache=str(
                 platformdirs.user_cache_path("python-sigrok", ensure_exists=True)
