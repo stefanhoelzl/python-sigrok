@@ -48,7 +48,12 @@ def function_annotations(funcs: dict[str, CType]) -> Iterator[str]:
 
     def return_type_annotation(return_ctype: CType) -> str:
         return_type = return_ctype.type_spec
-        return {"void": "None", "int": "int", "char": "bytes"}.get(return_type, "None")
+        if "*" in return_ctype.declarators:
+            if return_type == "char":
+                return "bytes"
+            return "int"
+
+        return {"void": "None", "int": "int"}.get(return_type, "None")
 
     for name, func in only_public(funcs):
         ret = return_type_annotation(func.type_spec)

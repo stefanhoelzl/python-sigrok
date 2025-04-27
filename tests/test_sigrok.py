@@ -165,6 +165,12 @@ class TestDevice:
         for ch in dev.channels():
             assert ch.enabled == (ch.name in ["D0", "D1"])
 
+    def test_set_uint64_config(self, dev: Device) -> None:
+        dev.set_config_uint64(ConfigKey.SR_CONF_SAMPLERATE, 100)
+
+    def test_set_bool_config(self, dev: Device) -> None:
+        dev.set_config_bool(ConfigKey.SR_CONF_AVERAGING, enabled=True)
+
 
 @pytest.fixture
 def ch(dev: Device) -> Channel:

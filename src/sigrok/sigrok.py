@@ -198,7 +198,7 @@ class SigrokChannelNotFoundError(SigrokError):
 
 
 if TYPE_CHECKING:
-    ConfigKey = enum.EnumType["lib.type_sr_configkey"]  # type: ignore[type-arg]
+    ConfigKey = lib.type_sr_configkey
 else:
     ConfigKey = enum.IntEnum("ConfigKey", lib.sr_configkey)  # type: ignore[misc]
 
@@ -261,6 +261,26 @@ class Device:
 
     def close(self) -> None:
         _try(lib.sr_dev_close(self._dev))
+
+    def set_config_uint64(self, config_key: ConfigKey, value: int) -> None:
+        self._set_config(config_key, lib.g_variant_new_uint64(value).rval)
+
+    def set_config_int32(self, config_key: ConfigKey, value: int) -> None:
+        self._set_config(config_key, lib.g_variant_new_int32(value).rval)
+
+    def set_config_double(self, config_key: ConfigKey, value: float) -> None:
+        self._set_config(config_key, lib.g_variant_new_double(value).rval)
+
+    def set_config_bool(self, config_key: ConfigKey, *, enabled: bool) -> None:
+        self._set_config(config_key, lib.g_variant_new_boolean(enabled).rval)
+
+    def set_config_string(self, config_key: ConfigKey, value: str) -> None:
+        self._set_config(
+            config_key, lib.g_variant_new_string(value.encode("utf-8")).rval
+        )
+
+    def _set_config(self, config_key: ConfigKey, gvariant_ptr: int) -> None:
+        _try(lib.sr_config_set(self._dev, None, config_key.value, gvariant_ptr))
 
     def __enter__(self) -> Self:
         self.open()

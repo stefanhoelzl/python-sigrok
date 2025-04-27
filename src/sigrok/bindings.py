@@ -73,7 +73,7 @@ with (
                 str(lib_paths.glib_includes.absolute() / "gvariant.h"),
                 str(lib_paths.glib_includes.absolute() / "garray.h"),
                 str(lib_paths.glib_includes.absolute() / "gmain.h"),
-                str(package_includes.absolute() / "stdarg.h"),
+                str(package_includes.absolute() / "fixes.h"),
             ],
             cache=str(
                 platformdirs.user_cache_path("python-sigrok", ensure_exists=True)

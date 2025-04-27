@@ -28,7 +28,7 @@ pre-built libsigrok dlls are shipped with this package.
 
 ## Usage
 ```python
-from sigrok import Sigrok, Device, Packet, LogicPacket
+from sigrok import Sigrok, Device, Packet, LogicPacket, ConfigKey
 
 logic_packets = []
 
@@ -36,7 +36,7 @@ def cb(dev: Device, packet: Packet):
     print(f"{dev.model} recorded {packet}")
     if isinstance(packet, LogicPacket):
         logic_packets.append(packet)
-    return len(logic_packets) < 10
+    return len(logic_packets) < 10  # return False to stop acquisition
 
 
 with (
@@ -44,6 +44,7 @@ with (
     sr.get_driver("demo") as driver,
     driver.scan()[0] as device
 ):
+    device.set_config_uint64(ConfigKey.SR_CONF_SAMPLERATE, 1000)
     device.enable_channels("D0")
     sr.run(cb, [device])
 ```
