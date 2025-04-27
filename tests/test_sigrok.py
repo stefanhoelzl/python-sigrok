@@ -9,6 +9,7 @@ from sigrok import (
     ConfigKey,
     Device,
     DeviceDriver,
+    DeviceNotFoundError,
     EndPacket,
     HeaderPacket,
     LogicPacket,
@@ -113,6 +114,16 @@ class TestDeviceDriver:
     def test_scan_without_options(self, dr: DeviceDriver) -> None:
         assert len(dr.scan()) == 1
         assert isinstance(dr.scan()[0], Device)
+
+    def test_get_device(self, dr: DeviceDriver) -> None:
+        dr.get_device()
+
+    def test_get_device_by_idx(self, dr: DeviceDriver) -> None:
+        dr.get_device(0)
+
+    def test_get_devices_raise_no_device_found(self, dr: DeviceDriver) -> None:
+        with pytest.raises(DeviceNotFoundError):
+            dr.get_device(serial_number="0")
 
     def test_repr(self, dr: DeviceDriver) -> None:
         assert repr(dr) == "<driver demo>"

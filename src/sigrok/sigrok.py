@@ -119,6 +119,11 @@ def _try(result: CallResult, hint: str = "") -> CallResult:
     return result
 
 
+class DeviceNotFoundError(SigrokError):
+    def __init__(self) -> None:
+        super().__init__("no matching device found")
+
+
 def _iter_g_slist(slist: Any) -> Iterator[Any]:
     gslist = _cast_p(slist, lib.GSList)
     for idx in itertools.count():
@@ -339,6 +344,17 @@ class DeviceDriver:
         return [
             Device(dev=_cast_p(x, lib.sr_dev_inst)) for x in _consume_g_slist(slist)
         ]
+
+    def get_device(self, idx: int = 0, *, serial_number: str | None = None) -> Device:
+        devices = [
+            device
+            for device in self.scan()
+            if serial_number is None or device.serial_number == serial_number
+        ]
+        try:
+            return devices[idx]
+        except IndexError as e:
+            raise DeviceNotFoundError from e
 
     def __str__(self) -> str:
         return self.longname

@@ -42,7 +42,7 @@ def cb(dev: Device, packet: Packet):
 with (
     Sigrok() as sr,
     sr.get_driver("demo") as driver,
-    driver.scan()[0] as device
+    driver.get_device() as device
 ):
     device.set_config_uint64(ConfigKey.SR_CONF_SAMPLERATE, 1000)
     device.enable_channels("D0")
