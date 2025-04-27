@@ -1,5 +1,7 @@
 import contextlib
+import importlib.metadata
 import importlib.resources
+import logging
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -61,6 +63,14 @@ with (
     platform_lib_paths() as lib_paths,
     importlib.resources.path("sigrok", "include") as package_includes,
 ):
+    cache_path = (
+        platformdirs.user_cache_path("python-sigrok", ensure_exists=True)
+        / f"libsigrok.{importlib.metadata.version('sigrok')}.pyclibrary.cache"
+    )
+    if not cache_path.exists():
+        logging.getLogger("sigrok").warning(
+            "parsing header files on first invocation. this may take a while!"
+        )
     lib = CLibrary(
         str(lib_paths.libsigrok.absolute()),
         CParser(
@@ -75,9 +85,6 @@ with (
                 str(lib_paths.glib_includes.absolute() / "gmain.h"),
                 str(package_includes.absolute() / "fixes.h"),
             ],
-            cache=str(
-                platformdirs.user_cache_path("python-sigrok", ensure_exists=True)
-                / "libsigrok.pyclibrary.cache"
-            ),
+            cache=str(cache_path),
         ),
     )
