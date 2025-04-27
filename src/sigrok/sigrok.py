@@ -512,13 +512,16 @@ class Sigrok:
     def run(
         self,
         packet_callback: Callable[[Device, Packet], bool],
-        devices: Iterable[Device],
+        devices: Device | Iterable[Device],
     ) -> None:
         session = ct.cast(
             _try(lib.sr_session_new(self._sr))["session"],
             ct.POINTER(lib.sr_session),  # type: ignore[call-overload]
         )
         try:
+            if isinstance(devices, Device):
+                devices = [devices]
+
             for device in devices:
                 _try(lib.sr_session_dev_add(session, device._dev))  # noqa: SLF001
 
