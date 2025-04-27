@@ -69,12 +69,18 @@ jobs:
           pattern: libsigrok-*
           path: src/sigrok
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: sigrok-firmware
+          path: src/sigrok/firmware
+
       - run: uv run inv stubs.bindings
 
       - run: uv run inv dev.format-and-lint --ci
 
       - if: github.ref_name == 'main'
         run: uv run inv dev.update-version
+
       - run: uv build --wheel
       - run: unzip -l dist/*.whl
 
