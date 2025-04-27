@@ -114,6 +114,7 @@ format-jinja = '''
 
 [tool.hatch.build.targets.wheel]
 artifacts = [
+    "*.pyi",
     "*.dll",
     "*.h",
     "*.fw",
