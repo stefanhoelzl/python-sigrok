@@ -1,6 +1,6 @@
 [project]
 name = "sigrok"
-version = "0.0.1"
+dynamic = ["version"]
 authors = [
     { name = "Stefan Hoelzl", email = "stefan.hoelzl@posteo.de"},
 ]
@@ -21,7 +21,6 @@ dev = [
     "types-invoke==2.0.0.10",
     "pytest==8.3.5",
     "mypy==1.15.0",
-    "tomlkit==0.13.2"
 ]
 
 [tool.uv]
@@ -83,8 +82,21 @@ exclude = [
 addopts = "-v"
 
 [build-system]
-requires = ["hatchling==1.27.0"]
+requires = [
+    "hatchling==1.27.0",
+    "uv-dynamic-versioning==0.7.0"
+]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+format-jinja = '''
+    {{ base }}
+    {%- if distance > 0 -%} .post{{ timestamp }} {%- endif -%}
+    {%- if dirty and env.get("CI") != "true" -%} +dirty {%- endif -%}
+'''
 
 [tool.hatch.build.targets.wheel]
 artifacts = [
@@ -93,3 +105,6 @@ artifacts = [
     "*.fw",
     "*.rbf",
 ]
+
+[tool.uv.sources]
+uv-dynamic-versioning = { git = "https://github.com/ninoseki/uv-dynamic-versioning", tag = "v0.8.0" }
