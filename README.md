@@ -4,7 +4,7 @@ Python-API for [libsigrok](https://sigrok.org/wiki/Libsigrok)
 
 ## Installation
 ```bash
-pip install -i https://test.pypi.org/simple/ sigrok
+pip install sigrok
 ```
 
 ### Requirements
