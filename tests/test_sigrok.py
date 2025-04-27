@@ -13,7 +13,7 @@ from sigrok import (
     EndPacket,
     HeaderPacket,
     LogicPacket,
-    Packet,
+    Session,
     Sigrok,
     SigrokChannelNotFoundError,
     SigrokDriverNotFoundError,
@@ -228,29 +228,39 @@ class TestLogging:
         assert caplog.records
 
 
-class TestRun:
-    def test_complete_run(self) -> None:
-        packets = []
-        expected_packets = 3
-        expected_logic_length = 4096
+@pytest.fixture
+def session(sr: Sigrok, dev: Device) -> Session:
+    return sr.session(devices=dev)
 
-        def cb(_device: Device, packet: Packet) -> bool:
-            packets.append(packet)
-            return len(packets) <= 1
 
-        with (
-            Sigrok() as sr,
-            sr.get_driver("demo") as driver,
-            driver.scan()[0] as device,
-        ):
-            for channel in device.channels():
-                channel.enabled = channel.type == ChannelType.Logic
-            sr.run(cb, [device])
+class TestSession:
+    def test_add_device(self, sr: Sigrok, dev: Device) -> None:
+        session = sr.session()
+        session.add_device(dev)
 
-        assert len(packets) == expected_packets
-        header = packets[0]
-        logic = packets[1]
-        end = packets[2]
+    def test_start_stop(self, session: Session) -> None:
+        session.start()
+        session.stop()
+
+    def test_is_running(self, session: Session) -> None:
+        assert not session.is_running
+        with session:
+            assert session.is_running
+        assert not session.is_running
+
+    def test_next_packets(self, session: Session, dev: Device) -> None:
+        expected_logic_length = 1024
+
+        dev.set_config_uint64(ConfigKey.SR_CONF_LIMIT_SAMPLES, expected_logic_length)
+        dev.set_config_uint64(ConfigKey.SR_CONF_SAMPLERATE, 1_000_000)
+
+        for ch in dev.channels():
+            ch.enabled = ch.name == "D0"
+
+        with session:
+            header = session.next_packet(timeout=1)
+            logic = session.next_packet(timeout=1)
+            end = session.next_packet(timeout=1)
 
         assert isinstance(header, HeaderPacket)
         assert header.feed_version == 1

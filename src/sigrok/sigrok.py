@@ -7,13 +7,15 @@ import importlib.resources
 import itertools
 import logging
 import os
+import queue
+import threading
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from sigrok.bindings import Pointer, lib
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Iterator
+    from collections.abc import Iterable, Iterator
     from pathlib import Path
     from types import TracebackType
 
@@ -114,7 +116,7 @@ class SigrokIOError(SigrokCError):
 
 
 def _try(result: CallResult, hint: str = "") -> CallResult:
-    if result.rval != 0:
+    if result.rval < 0:
         raise SigrokCError.from_error_code(result.rval, hint=hint)
     return result
 
@@ -364,16 +366,21 @@ class DeviceDriver:
 
 
 class Packet:
-    def __init__(self, packet: Pointer[lib.type_sr_datafeed_packet]) -> None:
+    def __init__(
+        self, packet: Pointer[lib.type_sr_datafeed_packet], device: Device
+    ) -> None:
         self.type = packet.contents.type
+        self.device = device
 
     def __repr__(self) -> str:
         return f"<packet type={self.type}>"
 
 
 class HeaderPacket(Packet):
-    def __init__(self, packet: Pointer[lib.type_sr_datafeed_packet]) -> None:
-        super().__init__(packet)
+    def __init__(
+        self, packet: Pointer[lib.type_sr_datafeed_packet], device: Device
+    ) -> None:
+        super().__init__(packet, device)
         payload = _cast_p(packet.contents.payload, lib.sr_datafeed_header)
         self.feed_version = payload.contents.feed_version
 
@@ -387,8 +394,10 @@ class EndPacket(Packet):
 
 
 class LogicPacket(Packet):
-    def __init__(self, packet: Pointer[lib.type_sr_datafeed_packet]) -> None:
-        super().__init__(packet)
+    def __init__(
+        self, packet: Pointer[lib.type_sr_datafeed_packet], device: Device
+    ) -> None:
+        super().__init__(packet, device)
         payload = _cast_p(packet.contents.payload, lib.sr_datafeed_logic)
         self.length = payload.contents.length
         self.unitsize = payload.contents.unitsize
@@ -402,14 +411,76 @@ class LogicPacket(Packet):
         return f"<logic packet {self.data[:8].hex(sep=' ').upper()}... {self.length}>"
 
 
-def parse_packet(packet: Pointer[lib.type_sr_datafeed_packet]) -> Packet:
+def parse_packet(
+    packet: Pointer[lib.type_sr_datafeed_packet], device: Device
+) -> Packet:
     if packet.contents.type == lib.SR_DF_HEADER:
-        return HeaderPacket(packet)
+        return HeaderPacket(packet, device)
     if packet.contents.type == lib.SR_DF_END:
-        return EndPacket(packet)
+        return EndPacket(packet, device)
     if packet.contents.type == lib.SR_DF_LOGIC:
-        return LogicPacket(packet)
-    return Packet(packet)
+        return LogicPacket(packet, device)
+    return Packet(packet, device)
+
+
+class Session:
+    def __init__(self, sess: Pointer[lib.type_sr_session]) -> None:
+        self._sess = sess
+        self._queue: queue.Queue[Packet] = queue.Queue()
+        self._thread = threading.Thread(
+            target=lambda: _try(lib.sr_session_run(self._sess)), daemon=True
+        )
+        self._packet_callback = lib.sr_session_datafeed_callback_add.arg_types[1](  # type: ignore[attr-defined]
+            lambda dev, packet, _data: self._queue.put(
+                parse_packet(
+                    _cast_p(packet, lib.sr_datafeed_packet),
+                    Device(dev=_cast_p(dev, lib.sr_dev_inst)),
+                )
+            )
+        )
+
+    def add_device(self, device: Device) -> None:
+        _try(lib.sr_session_dev_add(self._sess, device._dev))  # noqa: SLF001 access private member
+
+    @property
+    def is_running(self) -> bool:
+        return bool(_try(lib.sr_session_is_running(self._sess)).rval)
+
+    def next_packet(self, timeout: float | None = None) -> Packet:
+        try:
+            return self._queue.get(timeout=timeout)
+        except queue.Empty as e:
+            raise TimeoutError(timeout) from e
+
+    def start(self) -> None:
+        _try(
+            lib.sr_session_datafeed_callback_add(
+                self._sess, self._packet_callback, None
+            )
+        )
+
+        _try(lib.sr_session_start(self._sess))
+        self._thread.start()
+
+    def stop(self) -> None:
+        _try(lib.sr_session_stop(self._sess))
+        self._thread.join()
+        _try(lib.sr_session_datafeed_callback_remove_all(self._sess))
+
+    def __enter__(self) -> Self:
+        self.start()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        self.stop()
+
+    def __del__(self) -> None:
+        _try(lib.sr_session_destroy(self._sess))
 
 
 class SigrokDriverNotFoundError(SigrokError):
@@ -525,44 +596,23 @@ class Sigrok:
                 return driver
         raise SigrokDriverNotFoundError(name, list(map(repr, self.get_drivers())))
 
-    def run(
-        self,
-        packet_callback: Callable[[Device, Packet], bool],
-        devices: Device | Iterable[Device],
-    ) -> None:
-        session = ct.cast(
-            _try(lib.sr_session_new(self._sr))["session"],
-            ct.POINTER(lib.sr_session),  # type: ignore[call-overload]
+    def session(self, *, devices: list[Device] | Device | None = None) -> Session:
+        session = Session(
+            sess=ct.cast(
+                _try(lib.sr_session_new(self._sr))["session"],
+                ct.POINTER(lib.sr_session),  # type: ignore[call-overload]
+            )
         )
-        try:
-            if isinstance(devices, Device):
-                devices = [devices]
 
-            for device in devices:
-                _try(lib.sr_session_dev_add(session, device._dev))  # noqa: SLF001
+        if devices is None:
+            devices = []
+        elif isinstance(devices, Device):
+            devices = [devices]
 
-            def wrapper(
-                dev: Pointer[lib.type_sr_dev_inst],
-                cpacket: Pointer[lib.type_sr_datafeed_packet],
-                _data: ct.c_void_p,
-            ) -> None:
-                packet = parse_packet(_cast_p(cpacket, lib.sr_datafeed_packet))
-                cont = packet_callback(
-                    Device(dev=_cast_p(dev, lib.sr_dev_inst)), packet
-                )
-                if isinstance(packet, EndPacket):
-                    _try(lib.sr_session_datafeed_callback_remove_all(session))
-                elif not cont:
-                    _try(lib.sr_session_stop(session))
+        for device in devices:
+            session.add_device(device)
 
-            fn = lib.sr_session_datafeed_callback_add.arg_types[1](wrapper)  # type: ignore[attr-defined]
-            _try(lib.sr_session_datafeed_callback_add(session, fn, None))
-
-            _try(lib.sr_session_start(session))
-            _try(lib.sr_session_run(session))
-        finally:
-            _try(lib.sr_session_datafeed_callback_remove_all(session))
-            _try(lib.sr_session_destroy(session))
+        return session
 
     def __enter__(self) -> Self:
         self.init()
